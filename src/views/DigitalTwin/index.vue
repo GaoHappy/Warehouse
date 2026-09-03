@@ -372,8 +372,7 @@ onUnmounted(() => {
   position: relative;
   background: #020d1a;
   overflow: hidden;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: "HanYiYaKuHei", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 .dt-header {

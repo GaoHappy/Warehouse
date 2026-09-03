@@ -1,5 +1,12 @@
 <template>
   <div class="konva-wrapper" ref="wrapperRef">
+    <div class="ruler ruler--corner"></div>
+    <div class="ruler ruler--top">
+      <canvas ref="topRulerCanvasRef"></canvas>
+    </div>
+    <div class="ruler ruler--left">
+      <canvas ref="leftRulerCanvasRef"></canvas>
+    </div>
     <v-stage
       ref="stageRef"
       :config="stageConfig"
@@ -19,11 +26,6 @@
             fill: '#1a1e24',
             listening: false,
           }"
-        />
-        <v-line
-          v-for="(line, idx) in gridLines"
-          :key="'g' + idx"
-          :config="line"
         />
         <v-rect v-if="selectionRect" :config="selectionRect" />
       </v-layer>
@@ -166,6 +168,8 @@ const stageRef = ref<any>(null);
 const gridLayerRef = ref<any>(null);
 const layerRef = ref<any>(null);
 const guideLayerRef = ref<any>(null);
+const topRulerCanvasRef = ref<HTMLCanvasElement>();
+const leftRulerCanvasRef = ref<HTMLCanvasElement>();
 
 const stageWidth = ref(800);
 const stageHeight = ref(600);
@@ -182,41 +186,6 @@ const stageConfig = computed(() => ({
   y: stageY.value,
   draggable: false,
 }));
-
-const gridLines = computed(() => {
-  const lines: any[] = [];
-  const px = GRID_PX * stageScale.value;
-  const majorPx = px * 5;
-  const viewX = -stageX.value / stageScale.value;
-  const viewY = -stageY.value / stageScale.value;
-  const viewW = stageWidth.value / stageScale.value;
-  const viewH = stageHeight.value / stageScale.value;
-
-  const startX = Math.floor(viewX / px) * px;
-  const startY = Math.floor(viewY / px) * px;
-  const endX = viewX + viewW + px;
-  const endY = viewY + viewH + px;
-
-  for (let x = startX; x <= endX; x += px) {
-    const isMajor = Math.abs(x % majorPx) < 0.01;
-    lines.push({
-      points: [x, startY, x, endY],
-      stroke: isMajor ? "#4a5a6a" : "#2a3a4a",
-      strokeWidth: isMajor ? 1 : 0.5,
-      listening: false,
-    });
-  }
-  for (let y = startY; y <= endY; y += px) {
-    const isMajor = Math.abs(y % majorPx) < 0.01;
-    lines.push({
-      points: [startX, y, endX, y],
-      stroke: isMajor ? "#4a5a6a" : "#2a3a4a",
-      strokeWidth: isMajor ? 1 : 0.5,
-      listening: false,
-    });
-  }
-  return lines;
-});
 
 interface WarehouseLayout {
   warehouseId: string;
@@ -1467,6 +1436,7 @@ function handleWheel(e: any): void {
   } else {
     stageY.value -= e.evt.deltaY;
   }
+  drawRulers();
 }
 
 function handleResize(): void {
@@ -1474,6 +1444,133 @@ function handleResize(): void {
     stageWidth.value = wrapperRef.value.clientWidth;
     stageHeight.value = wrapperRef.value.clientHeight;
   }
+  drawRulers();
+}
+
+const RULER_SIZE = 30;
+
+function getNiceInterval(pixelsPerMm: number, targetPixels: number): number {
+  const mmPerTarget = targetPixels / (pixelsPerMm || 0.001);
+  const niceIntervals = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+  for (const interval of niceIntervals) {
+    if (interval >= mmPerTarget) return interval;
+  }
+  return 10000;
+}
+
+function drawRulers(): void {
+  drawTopRuler();
+  drawLeftRuler();
+}
+
+function drawTopRuler(): void {
+  const canvas = topRulerCanvasRef.value;
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const width = canvas.clientWidth;
+  const height = RULER_SIZE;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  ctx.scale(dpr, dpr);
+
+  ctx.fillStyle = "#1a1e24";
+  ctx.fillRect(0, 0, width, height);
+
+  const pixelsPerMm = SCALE * stageScale.value;
+  const majorInterval = getNiceInterval(pixelsPerMm, 100);
+  const minorInterval = majorInterval / 5;
+
+  const leftMm = (RULER_SIZE - stageX.value) / pixelsPerMm;
+  const rightMm = (stageWidth.value + RULER_SIZE - stageX.value) / pixelsPerMm;
+
+  const startMinor = Math.floor(leftMm / minorInterval) * minorInterval;
+  for (let mm = startMinor; mm <= rightMm; mm += minorInterval) {
+    const screenX = mm * pixelsPerMm + stageX.value;
+    const canvasX = screenX - RULER_SIZE;
+    const isMajor = Math.abs(mm % majorInterval) < 0.01;
+    const tickHeight = isMajor ? height * 0.55 : height * 0.3;
+
+    ctx.strokeStyle = isMajor ? "#8a9aaa" : "#4a5a6a";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(canvasX, height);
+    ctx.lineTo(canvasX, height - tickHeight);
+    ctx.stroke();
+
+    if (isMajor) {
+      const label = mm >= 1000 ? `${(mm / 1000).toFixed(1)}m` : `${mm}`;
+      ctx.fillStyle = "#8a9aaa";
+      ctx.font = "10px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(label, canvasX, height - tickHeight - 4);
+    }
+  }
+
+  ctx.strokeStyle = "#3a4a5a";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, height - 0.5);
+  ctx.lineTo(width, height - 0.5);
+  ctx.stroke();
+}
+
+function drawLeftRuler(): void {
+  const canvas = leftRulerCanvasRef.value;
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const width = RULER_SIZE;
+  const height = canvas.clientHeight;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  ctx.scale(dpr, dpr);
+
+  ctx.fillStyle = "#1a1e24";
+  ctx.fillRect(0, 0, width, height);
+
+  const pixelsPerMm = SCALE * stageScale.value;
+  const majorInterval = getNiceInterval(pixelsPerMm, 100);
+  const minorInterval = majorInterval / 5;
+
+  const topMm = (RULER_SIZE - stageY.value) / pixelsPerMm;
+  const bottomMm =
+    (stageHeight.value + RULER_SIZE - stageY.value) / pixelsPerMm;
+
+  const startMinor = Math.floor(topMm / minorInterval) * minorInterval;
+  for (let mm = startMinor; mm <= bottomMm; mm += minorInterval) {
+    const screenY = mm * pixelsPerMm + stageY.value;
+    const canvasY = screenY - RULER_SIZE;
+    const isMajor = Math.abs(mm % majorInterval) < 0.01;
+    const tickWidth = isMajor ? width * 0.55 : width * 0.3;
+
+    ctx.strokeStyle = isMajor ? "#8a9aaa" : "#4a5a6a";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(width, canvasY);
+    ctx.lineTo(width - tickWidth, canvasY);
+    ctx.stroke();
+
+    if (isMajor) {
+      const label = mm >= 1000 ? `${(mm / 1000).toFixed(1)}m` : `${mm}`;
+      ctx.fillStyle = "#8a9aaa";
+      ctx.font = "10px sans-serif";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, width - tickWidth - 4, canvasY);
+    }
+  }
+
+  ctx.strokeStyle = "#3a4a5a";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(width - 0.5, 0);
+  ctx.lineTo(width - 0.5, height);
+  ctx.stroke();
 }
 
 function handleDrop(event: DragEvent): void {
@@ -1641,6 +1738,10 @@ watch(
   }
 );
 
+watch([stageX, stageY, stageScale, stageWidth, stageHeight], () => {
+  drawRulers();
+});
+
 onMounted(() => {
   handleResize();
   window.addEventListener("resize", handleResize);
@@ -1663,6 +1764,53 @@ onUnmounted(() => {
 
 <style scoped>
 .konva-wrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.ruler {
+  position: absolute;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.ruler--corner {
+  top: 0;
+  left: 0;
+  width: 30px;
+  height: 30px;
+  background: #1a1e24;
+  border-right: 1px solid #3a4a5a;
+  border-bottom: 1px solid #3a4a5a;
+}
+
+.ruler--top {
+  top: 0;
+  left: 30px;
+  right: 0;
+  height: 30px;
+  background: #1a1e24;
+  border-bottom: 1px solid #3a4a5a;
+}
+
+.ruler--top canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ruler--left {
+  top: 30px;
+  left: 0;
+  bottom: 0;
+  width: 30px;
+  background: #1a1e24;
+  border-right: 1px solid #3a4a5a;
+}
+
+.ruler--left canvas {
+  display: block;
   width: 100%;
   height: 100%;
 }

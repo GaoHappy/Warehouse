@@ -698,8 +698,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   background: #0b1829;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: "HanYiYaKuHei", "PingFang SC", "Microsoft YaHei", sans-serif;
   position: relative;
 }
 
