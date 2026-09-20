@@ -22,12 +22,18 @@ export class ShelfBuilder {
 
     this.locationBuilder.build(shelfConfig, group)
 
+    const halfW = shelfConfig.width / 2
+    const halfD = shelfConfig.depth / 2
+    const theta = THREE.MathUtils.degToRad(shelfConfig.rotationY)
+    const cos = Math.cos(theta)
+    const sin = Math.sin(theta)
+
     group.position.set(
-      shelfConfig.position.x + shelfConfig.width / 2,
+      shelfConfig.position.x + halfW * cos - halfD * sin,
       shelfConfig.position.y,
-      shelfConfig.position.z + shelfConfig.depth / 2,
+      shelfConfig.position.z + halfW * sin + halfD * cos,
     )
-    group.rotation.y = shelfConfig.rotationY
+    group.rotation.y = -theta
 
     return group
   }
